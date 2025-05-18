@@ -253,7 +253,7 @@
 #if FF_MAX_SS == FF_MIN_SS
 #define SS(fs)	((UINT)FF_MAX_SS)	/* Fixed sector size */
 #else
-#define SS(fs)	((fs)->ssize)	/* Variable sector size */
+#define SS(fs)	(1U << (fs)->sshift)	/* Variable sector size */
 #endif
 
 
@@ -3344,8 +3344,8 @@ static FRESULT mount_volume (	/* FR_OK(0): successful, !=0: an error occurred */
 		return FR_WRITE_PROTECTED;
 	}
 #if FF_MAX_SS != FF_MIN_SS				/* Get sector size (multiple sector size cfg only) */
-	if (disk_ioctl(fs->pdrv, GET_SECTOR_SIZE, &SS(fs)) != RES_OK) return FR_DISK_ERR;
-	if (SS(fs) > FF_MAX_SS || SS(fs) < FF_MIN_SS || (SS(fs) & (SS(fs) - 1))) return FR_DISK_ERR;
+	if (disk_ioctl(fs->pdrv, GET_SECTOR_SHIFT, &fs->sshift) != RES_OK) return FR_DISK_ERR;
+	if (SS(fs) > FF_MAX_SS || SS(fs) < FF_MIN_SS) return FR_DISK_ERR;
 #endif
 
 	/* Find an FAT volume on the hosting drive */
@@ -5636,8 +5636,10 @@ static FRESULT create_partition (
 		static const BYTE gpt_mbr[16] = {0x00, 0x00, 0x02, 0x00, 0xEE, 0xFE, 0xFF, 0x00, 0x01, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF};
 
 #if FF_MAX_SS != FF_MIN_SS
-		if (disk_ioctl(drv, GET_SECTOR_SIZE, &ss) != RES_OK) return FR_DISK_ERR;	/* Get sector size */
-		if (ss > FF_MAX_SS || ss < FF_MIN_SS || (ss & (ss - 1))) return FR_DISK_ERR;
+		BYTE sshift;
+		if (disk_ioctl(drv, GET_SECTOR_SHIFT, &sshift) != RES_OK) return FR_DISK_ERR;	/* Get sector size */
+		ss = 1U << sshift;
+		if (ss > FF_MAX_SS || ss < FF_MIN_SS) return FR_DISK_ERR;
 #else
 		ss = FF_MAX_SS;
 #endif
@@ -5796,8 +5798,10 @@ FRESULT f_mkfs (
 	if (sz_blk == 0) disk_ioctl(pdrv, GET_BLOCK_SIZE, &sz_blk);					/* Block size from the parameter or lower layer */
  	if (sz_blk == 0 || sz_blk > 0x8000 || (sz_blk & (sz_blk - 1))) sz_blk = 1;	/* Use default if the block size is invalid */
 #if FF_MAX_SS != FF_MIN_SS
-	if (disk_ioctl(pdrv, GET_SECTOR_SIZE, &ss) != RES_OK) return FR_DISK_ERR;
-	if (ss > FF_MAX_SS || ss < FF_MIN_SS || (ss & (ss - 1))) return FR_DISK_ERR;
+	BYTE sshift;
+	if (disk_ioctl(pdrv, GET_SECTOR_SHIFT, &sshift) != RES_OK) return FR_DISK_ERR;
+	ss = 1U << sshift;
+	if (ss > FF_MAX_SS || ss < FF_MIN_SS) return FR_DISK_ERR;
 #else
 	ss = FF_MAX_SS;
 #endif
